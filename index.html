@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Messenger — Supabase</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --panel-2: #172033;
+    --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
+    --muted-2: #64748b; --accent: #3b82f6; --accent-h: #2563eb;
+    --msg: #334155; --msg-own: #3b82f6; --danger: #dc2626; --success: #10b981;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .app {
+    width: 100%; max-width: 780px; height: 100vh; max-height: 900px;
+    display: flex; flex-direction: column;
+    background: var(--panel); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,.35); position: relative;
+  }
+  @media (max-width: 780px) { .app { border-radius: 0; } }
+  .hidden { display: none !important; }
+
+  .auth { padding: 40px 24px; display: flex; flex-direction: column; gap: 14px; margin: auto; width: 100%; max-width: 420px; }
+  .auth h1 { font-size: 22px; text-align: center; margin-bottom: 4px; }
+  .auth input, .input {
+    padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 15px; outline: none; font-family: inherit;
+  }
+  .auth input:focus, .input:focus { border-color: var(--accent); }
+  .btn {
+    padding: 10px 14px; border-radius: 8px; border: none;
+    background: var(--accent); color: white; font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  .btn:hover { background: var(--accent-h); }
+  .btn.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); font-weight: 500; }
+  .btn.secondary:hover { color: var(--text); border-color: var(--muted); }
+  .btn.danger { background: var(--danger); color: white; }
+  .btn.success { background: var(--success); color: white; }
+  .btn.small { padding: 6px 10px; font-size: 12px; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .error { color: #f87171; font-size: 14px; text-align: center; min-height: 20px; }
+  .hint { color: var(--muted-2); font-size: 12px; }
+
+  .rooms-topbar { display: flex; align-items: center; gap: 8px; padding: 0 4px 4px; flex-wrap: wrap; }
+  .rooms-topbar .title-block { flex: 1; min-width: 0; }
+  .rooms-topbar .title-block h1 { font-size: 18px; }
+  .rooms-topbar .title-block .hint { text-align: left; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 6px; }
+  .tab {
+    flex: 1; padding: 8px; text-align: center; font-size: 13px;
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; cursor: pointer; font-family: inherit;
+  }
+  .tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .room-list { display: flex; flex-direction: column; gap: 8px; max-height: 45vh; overflow-y: auto; padding: 4px; margin: 4px 0; }
+  .room-item {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 8px;
+    background: var(--bg); border: 1px solid var(--border); cursor: pointer; transition: border-color .15s;
+  }
+  .room-item:hover { border-color: var(--accent); }
+  .room-item .name { flex: 1; font-weight: 500; }
+  .room-item .meta { font-size: 11px; color: var(--muted-2); }
+  .room-item .lock { font-size: 14px; color: var(--muted); }
+  .badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 500; background: transparent; color: var(--muted-2); border: 1px solid var(--border); }
+  .badge.denied { color: #fca5a5; border-color: rgba(220,38,38,.4); }
+
+  .chat { display: flex; flex-direction: column; height: 100%; }
+  .chat-header {
+    padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .chat-header .room-block { flex: 1; min-width: 140px; }
+  .chat-header .room-name { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .chat-header .user-email { font-size: 12px; color: var(--muted); }
+  .chat-header button {
+    padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .chat-header button:hover { color: var(--text); border-color: var(--muted); }
+  .chat-header button.icon { padding: 6px 8px; display: inline-flex; align-items: center; justify-content: center; }
+
+  .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg {
+    max-width: 75%; padding: 10px 14px; border-radius: 12px;
+    background: var(--msg); align-self: flex-start; word-wrap: break-word; position: relative;
+  }
+  .msg.own { background: var(--msg-own); color: white; align-self: flex-end; }
+  .msg .sender { font-size: 11px; opacity: .85; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .msg .time { font-size: 10px; opacity: .65; margin-top: 4px; text-align: right; }
+  .empty { color: var(--muted-2); text-align: center; margin: auto; font-size: 14px; }
+
+  .msg.gift { background: linear-gradient(135deg, rgba(251,191,36,.15), rgba(236,72,153,.15)); border: 1px solid rgba(251,191,36,.35); text-align: center; }
+  .msg.gift.own { background: linear-gradient(135deg, rgba(251,191,36,.25), rgba(236,72,153,.25)); border-color: rgba(251,191,36,.5); }
+  .gift-emoji { font-size: 42px; line-height: 1.1; margin: 4px 0; animation: giftPop .5s ease-out; }
+  .gift-name { font-weight: 600; font-size: 14px; }
+  .gift-price { font-size: 11px; opacity: .8; margin-top: 2px; }
+  @keyframes giftPop { 0% { transform: scale(0) rotate(-15deg); opacity: 0; } 60% { transform: scale(1.2) rotate(5deg); opacity: 1; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+
+  .level-tag {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 10px; padding: 1px 6px; border-radius: 10px;
+    background: rgba(251,191,36,.15); border: 1px solid rgba(251,191,36,.3);
+    color: inherit; font-weight: 600;
+  }
+  .admin-tag {
+    display: inline-flex; font-size: 10px; padding: 1px 6px; border-radius: 10px;
+    background: rgba(220,38,38,.15); border: 1px solid rgba(220,38,38,.4);
+    color: #fca5a5; font-weight: 600;
+  }
+
+  .composer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); background: var(--bg); }
+  .composer input {
+    flex: 1; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); font-size: 15px; outline: none; font-family: inherit;
+  }
+  .composer input:focus { border-color: var(--accent); }
+  .composer button {
+    padding: 0 16px; border-radius: 8px; border: none;
+    background: var(--accent); color: white; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+
+  .panel {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50;
+  }
+  .panel-inner {
+    background: var(--panel); border-radius: 12px; padding: 20px;
+    width: 100%; max-width: 540px; max-height: 85vh; overflow-y: auto; border: 1px solid var(--border);
+  }
+  .panel-inner h3 { font-size: 16px; margin-bottom: 14px; }
+  .panel-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; flex-wrap: wrap; }
+
+  .settings-block { margin-top: 16px; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); }
+  .settings-block h4 { font-size: 13px; margin-bottom: 8px; color: var(--muted); }
+  .row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .row input, .row select {
+    flex: 1; min-width: 140px; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--panel);
+    color: var(--text); font-size: 13px; outline: none; font-family: inherit;
+  }
+  .toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; }
+  .toggle input { display: none; }
+  .toggle .switch { width: 36px; height: 20px; border-radius: 10px; background: var(--border); position: relative; transition: background .2s; flex-shrink: 0; }
+  .toggle .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform .2s; }
+  .toggle input:checked + .switch { background: var(--accent); }
+  .toggle input:checked + .switch::after { transform: translateX(16px); }
+
+  .member-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .member-row:last-child { border-bottom: none; }
+  .member-row .email { flex: 1; font-size: 13px; word-break: break-all; min-width: 140px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .member-row select, .member-row button { padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; cursor: pointer; font-family: inherit; }
+
+  .balance-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 20px;
+    background: var(--bg); border: 1px solid var(--border);
+    font-size: 13px; font-weight: 600;
+  }
+  .level-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 20px;
+    background: rgba(251,191,36,.15); border: 1px solid rgba(251,191,36,.35);
+    font-size: 13px; font-weight: 600;
+  }
+  .progress { width: 100%; height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; margin-top: 6px; }
+  .progress-bar { height: 100%; background: var(--accent); transition: width .3s; }
+
+  .profile-card {
+    display: flex; align-items: center; gap: 12px; padding: 12px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  }
+  .profile-card .avatar-lg {
+    width: 52px; height: 52px; border-radius: 50%; background: var(--accent);
+    color: white; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 20px; flex-shrink: 0;
+  }
+  .profile-card .info { flex: 1; }
+  .profile-card .info .email { font-size: 13px; color: var(--muted); word-break: break-all; }
+  .profile-card .info .name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+  .status { font-size: 11px; color: var(--muted-2); padding: 0 14px 8px; }
+
+  .top-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border-radius: 8px; background: var(--bg); border: 1px solid var(--border);
+  }
+  .top-row .rank {
+    width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; flex-shrink: 0;
+    background: var(--panel); color: var(--muted); border: 1px solid var(--border);
+  }
+  .top-row .rank.r1 { background: linear-gradient(135deg,#fbbf24,#f59e0b); color: #000; border: none; }
+  .top-row .rank.r2 { background: linear-gradient(135deg,#e5e7eb,#9ca3af); color: #000; border: none; }
+  .top-row .rank.r3 { background: linear-gradient(135deg,#d97706,#92400e); color: #fff; border: none; }
+  .top-row .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+  .top-row .who { flex: 1; min-width: 0; }
+  .top-row .who .name { font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .top-row .who .sub { font-size: 11px; color: var(--muted-2); }
+  .top-row .stats { text-align: right; font-size: 12px; }
+
+  .dm-layout { display: flex; flex-direction: column; height: 100%; }
+  .dm-tabs { display: flex; gap: 6px; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .dm-tabs .tab { flex: 0 0 auto; padding: 6px 12px; }
+  .dm-search { padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border); display: flex; gap: 6px; }
+  .dm-search input { flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text); outline: none; font-family: inherit; }
+  .dm-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .dm-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); cursor: pointer; }
+  .dm-item:hover { border-color: var(--accent); }
+  .dm-item .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+  .dm-item .info { flex: 1; min-width: 0; }
+  .dm-item .info .name { font-weight: 500; font-size: 14px; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .dm-item .info .preview { font-size: 11px; color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dm-search-results { max-height: 300px; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin: 0 14px; }
+  .dm-search-result { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .dm-search-result:last-child { border-bottom: none; }
+  .dm-search-result:hover { background: var(--bg); }
+
+  .gifts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+  @media (max-width: 480px) { .gifts-grid { grid-template-columns: repeat(2, 1fr); } }
+  .gift-card {
+    padding: 14px 8px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); text-align: center;
+    cursor: pointer; font-family: inherit; transition: transform .15s, border-color .15s;
+  }
+  .gift-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .gift-card:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  .gift-card .emoji { font-size: 32px; display: block; margin-bottom: 6px; }
+  .gift-card .name { font-size: 13px; font-weight: 600; }
+  .gift-card .price { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .inventory-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .inventory-item:last-child { border-bottom: none; }
+  .inventory-item .emoji { font-size: 28px; }
+  .inventory-item .info { flex: 1; }
+  .inventory-item .info .name { font-weight: 600; font-size: 13px; }
+  .inventory-item .info .from { font-size: 11px; color: var(--muted-2); }
+  .inventory-item button {
+    padding: 6px 10px; border-radius: 6px; border: 1px solid var(--success);
+    background: transparent; color: var(--success); font-size: 12px;
+    cursor: pointer; font-family: inherit;
+  }
+  .inventory-item button:hover { background: rgba(16,185,129,.1); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- AUTH -->
+  <div id="authScreen" class="auth">
+    <h1>💬 Messenger</h1>
+    <p class="hint">Supabase · ЛС, подарки, рейтинг</p>
+    <input id="email" type="email" placeholder="Email" autocomplete="email" />
+    <input id="password" type="password" placeholder="Пароль (мин. 6)" autocomplete="current-password" />
+    <div id="authError" class="error"></div>
+    <button id="loginBtn" class="btn">Войти</button>
+    <button id="signupBtn" class="btn secondary">Создать аккаунт</button>
+  </div>
+
+  <!-- ROOMS -->
+  <div id="roomScreen" class="auth hidden">
+    <div class="rooms-topbar">
+      <div class="title-block">
+        <h1>Комнаты</h1>
+        <div class="hint" id="userLabel"></div>
+      </div>
+      <button id="dmBtn" class="btn secondary small">✉️ ЛС</button>
+      <button id="topBtn" class="btn secondary small">🏆 Топ</button>
+      <button id="accountBtn" class="btn secondary small">Аккаунт</button>
+      <button id="logoutBtn" class="btn secondary small">Выйти</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tabList">Комнаты</button>
+      <button class="tab" id="tabCreate">Создать</button>
+    </div>
+
+    <div id="listPane">
+      <div id="roomList" class="room-list"></div>
+      <p class="hint" id="noRooms" style="display:none; text-align:center;">Комнат пока нет</p>
+    </div>
+
+    <div id="createPane" class="hidden" style="display:flex; flex-direction:column; gap:10px;">
+      <input id="newRoomName" class="input" type="text" placeholder="Название комнаты" />
+      <input id="newRoomPass" class="input" type="password" placeholder="Пароль (необязательно)" />
+      <label class="toggle">
+        <input type="checkbox" id="newRoomWhitelist" checked />
+        <span class="switch"></span>
+        <span>Белый список</span>
+      </label>
+      <button id="createBtn" class="btn">Создать</button>
+      <div id="createError" class="error"></div>
+    </div>
+
+    <div id="joinPane" class="hidden" style="display:flex; flex-direction:column; gap:10px;">
+      <h2 id="joinTitle">Вход</h2>
+      <input id="joinPass" class="input" type="password" placeholder="Пароль комнаты" />
+      <button id="joinConfirmBtn" class="btn">Войти</button>
+      <button id="joinCancelBtn" class="btn secondary">Отмена</button>
+      <div id="joinError" class="error"></div>
+    </div>
+  </div>
+
+  <!-- CHAT -->
+  <div id="chatScreen" class="chat hidden">
+    <div class="chat-header">
+      <div class="room-block">
+        <div class="room-name">
+          <span id="roomTitle"># room</span>
+          <span id="myRoleBadge"></span>
+        </div>
+        <div class="user-email" id="userEmailChat"></div>
+      </div>
+      <button class="icon" id="giftBtn" title="Подарки">🎁</button>
+      <button id="membersBtn">👥</button>
+      <button id="backBtn">←</button>
+    </div>
+    <div id="statusLine" class="status"></div>
+    <div id="messages" class="messages"></div>
+    <form id="composer" class="composer">
+      <input id="messageInput" type="text" placeholder="Сообщение..." autocomplete="off" />
+      <button type="submit">➤</button>
+    </form>
+  </div>
+
+  <!-- DM LIST -->
+  <div id="dmScreen" class="dm-layout hidden">
+    <div class="dm-tabs">
+      <button class="tab active" id="dmTabList">Диалоги</button>
+      <button class="tab" id="dmTabSearch">Найти</button>
+      <button id="dmBackBtn" class="btn secondary small" style="margin-left:auto;">← Комнаты</button>
+    </div>
+    <div id="dmListPane">
+      <div id="dmList" class="dm-list"></div>
+      <p class="hint" id="noDms" style="text-align:center; padding:20px;">Пока нет диалогов</p>
+    </div>
+    <div id="dmSearchPane" class="hidden">
+      <div class="dm-search">
+        <input id="dmSearchInput" type="email" placeholder="Email пользователя..." />
+        <button id="dmSearchBtn" class="btn">Найти</button>
+      </div>
+      <div id="dmSearchResults"></div>
+      <div id="dmSearchError" class="error"></div>
+    </div>
+  </div>
+
+  <!-- DM CHAT -->
+  <div id="dmChatScreen" class="chat hidden">
+    <div class="chat-header">
+      <div class="room-block">
+        <div class="room-name" id="dmChatTitle">Диалог</div>
+        <div class="user-email" id="dmChatStatus"></div>
+      </div>
+      <button class="icon" id="dmGiftBtn" title="Подарки">🎁</button>
+      <button id="dmChatBackBtn">←</button>
+    </div>
+    <div id="dmChatStatusLine" class="status"></div>
+    <div id="dmMessages" class="messages"></div>
+    <form id="dmComposer" class="composer">
+      <input id="dmMessageInput" type="text" placeholder="Сообщение..." autocomplete="off" />
+      <button type="submit">➤</button>
+    </form>
+  </div>
+
+  <!-- TOP PANEL -->
+  <div id="topPanel" class="panel hidden">
+    <div class="panel-inner">
+      <h3>🏆 Топ по рейтингу</h3>
+      <div id="topList" style="display:flex; flex-direction:column; gap:6px;"></div>
+      <div class="panel-actions">
+        <button id="closeTopBtn" class="btn secondary">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEMBERS PANEL -->
+  <div id="membersPanel" class="panel hidden">
+    <div class="panel-inner">
+      <h3 id="membersTitle">Участники</h3>
+      <div id="ownerSettings" class="hidden">
+        <div class="settings-block">
+          <h4>Настройки комнаты</h4>
+          <label class="toggle" style="margin-bottom:10px;">
+            <input type="checkbox" id="whitelistToggle" />
+            <span class="switch"></span>
+            <span>Белый список</span>
+          </label>
+          <h4>Переименовать</h4>
+          <div class="row">
+            <input id="renameInput" type="text" />
+            <button id="renameBtn" class="btn">Сохранить</button>
+          </div>
+          <div id="renameError" class="error" style="text-align:left;"></div>
+        </div>
+      </div>
+      <div id="membersList"></div>
+      <div id="addMemberBlock" class="hidden">
+        <div class="hint" style="text-align:left; margin-top:14px;">Добавить по email</div>
+        <div class="row">
+          <input id="addEmail" type="email" placeholder="user@example.com" />
+          <select id="addRole">
+            <option value="member">Участник</option>
+            <option value="moderator">Модератор</option>
+          </select>
+          <button id="addBtn" class="btn">Добавить</button>
+        </div>
+        <div id="addError" class="error" style="text-align:left;"></div>
+      </div>
+      <div class="panel-actions">
+        <button id="leaveRoomBtn" class="btn secondary hidden">Покинуть</button>
+        <button id="closeMembersBtn" class="btn secondary">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACCOUNT PANEL -->
+  <div id="accountPanel" class="panel hidden">
+    <div class="panel-inner">
+      <h3>Аккаунт</h3>
+
+      <div class="profile-card" style="margin-bottom:12px;">
+        <div class="avatar-lg" id="accAvatar">?</div>
+        <div class="info">
+          <div class="name" id="accName"></div>
+          <div class="email" id="accEmail"></div>
+        </div>
+      </div>
+
+      <div class="settings-block">
+        <h4>Баланс и рейтинг</h4>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <div class="balance-badge"><span>🪙</span><span id="accBalance">0</span></div>
+          <div class="level-badge">⭐ Ур. <span id="accLevel">1</span></div>
+          <span id="accAdminTag" class="admin-tag hidden">ADMIN</span>
+        </div>
+        <div style="margin-top:10px; font-size:12px; color:var(--muted);">
+          Рейтинг: <b id="accRating">0</b> / до след.: <b id="accNext">500</b>
+        </div>
+        <div class="progress"><div class="progress-bar" id="accProgress" style="width:0%"></div></div>
+      </div>
+
+      <div class="settings-block">
+        <h4>Инвентарь подарков</h4>
+        <div id="inventoryList"></div>
+        <div class="hint" style="text-align:left; margin-top:6px;">Продажа возвращает 85% цены.</div>
+      </div>
+
+      <div class="settings-block">
+        <h4>Админ-панель</h4>
+        <div id="adminTopupBlock" class="hidden">
+          <div class="row">
+            <input id="topupEmail" type="email" placeholder="Email получателя" />
+            <input id="topupAmount" type="number" min="1" placeholder="Монет" />
+            <button id="topupBtn" class="btn success">Выдать</button>
+          </div>
+          <div id="adminError" class="error" style="text-align:left;"></div>
+        </div>
+        <div id="adminNotYet" class="hint" style="text-align:left;">
+          Сделать себя админом — через SQL Editor:
+          <code style="background:var(--bg); padding:2px 6px; border-radius:4px; font-size:11px;">update public.profiles set is_admin = true where email = '...';</code>
+        </div>
+      </div>
+
+      <div class="settings-block">
+        <h4>Смена пароля</h4>
+        <div class="row"><input id="newPassInput" type="password" placeholder="Новый пароль (мин. 6)" /></div>
+        <div class="row">
+          <input id="newPass2Input" type="password" placeholder="Повторите" />
+          <button id="changePassBtn" class="btn">Сменить</button>
+        </div>
+        <div id="changePassError" class="error" style="text-align:left;"></div>
+      </div>
+
+      <div class="panel-actions">
+        <button id="closeAccountBtn" class="btn secondary">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GIFT PANEL -->
+  <div id="giftPanel" class="panel hidden">
+    <div class="panel-inner">
+      <h3 id="giftTitle">Подарки</h3>
+      <div class="balance-badge" style="margin-bottom:6px;">
+        <span>🪙</span>
+        <span id="giftBalance">0</span>
+      </div>
+      <div class="hint" style="text-align:left; margin-top:6px;" id="giftTarget"></div>
+      <div class="gifts-grid" id="giftsGrid"></div>
+      <div id="giftError" class="error" style="text-align:left; margin-top:10px;"></div>
+      <div class="panel-actions">
+        <button id="closeGiftBtn" class="btn secondary">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+const SUPABASE_URL = 'https://artuukqxfuhomdncfenu.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_kVuZTfkISJ1Vcp6UGiL-vQ_HuuUdAMi';
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ============================================================
+// КОНСТАНТЫ
+// ============================================================
+const RATING_PER_LEVEL = 500;
+const GIFTS = [
+  { id: 'rose',    emoji: '🌹', name: 'Роза',        price: 10 },
+  { id: 'heart',   emoji: '❤️', name: 'Сердце',      price: 25 },
+  { id: 'teddy',   emoji: '🧸', name: 'Мишка',       price: 50 },
+  { id: 'cake',    emoji: '🎂', name: 'Торт',        price: 100 },
+  { id: 'rocket',  emoji: '🚀', name: 'Ракета',      price: 250 },
+  { id: 'crown',   emoji: '👑', name: 'Корона',      price: 500 },
+  { id: 'diamond', emoji: '💎', name: 'Бриллиант',   price: 1000 },
+  { id: 'star',    emoji: '⭐', name: 'Звезда',      price: 2000 },
+  { id: 'trophy',  emoji: '🏆', name: 'Трофей',      price: 5000 }
+];
+const giftById = (id) => GIFTS.find(g => g.id === id);
+
+// ============================================================
+// DOM
+// ============================================================
+const $ = (id) => document.getElementById(id);
+const authScreen = $('authScreen');
+const roomScreen = $('roomScreen');
+const chatScreen = $('chatScreen');
+const dmScreen = $('dmScreen');
+const dmChatScreen = $('dmChatScreen');
+const messagesEl = $('messages');
+const messageInput = $('messageInput');
+const statusLine = $('statusLine');
+const roomTitle = $('roomTitle');
+const myRoleBadge = $('myRoleBadge');
+const roomList = $('roomList');
+const topPanel = $('topPanel');
+const membersPanel = $('membersPanel');
+const accountPanel = $('accountPanel');
+const giftPanel = $('giftPanel');
+
+// ============================================================
+// СОСТОЯНИЕ
+// ============================================================
+let currentUser = null;
+let currentProfile = null;
+let currentRoom = null;
+let currentRole = null;
+let pendingRoom = null;
+let channel = null;
+let dmChannel = null;
+let currentDmPeer = null;
+let giftTarget = null;
+const seenIds = new Set();
+const seenDmIds = new Set();
+
+// ============================================================
+// УТИЛИТЫ
+// ============================================================
+function showScreen(name) {
+  authScreen.classList.toggle('hidden', name !== 'auth');
+  roomScreen.classList.toggle('hidden', name !== 'room');
+  chatScreen.classList.toggle('hidden', name !== 'chat');
+  dmScreen.classList.toggle('hidden', name !== 'dm');
+  dmChatScreen.classList.toggle('hidden', name !== 'dmchat');
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function formatTime(iso) {
+  try { return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
+  catch { return ''; }
+}
+function levelOf(r) { return Math.floor(r / RATING_PER_LEVEL) + 1; }
+function ratingForNext(r) { return levelOf(r) * RATING_PER_LEVEL; }
+function progressPercent(r) {
+  const base = (levelOf(r) - 1) * RATING_PER_LEVEL;
+  const next = ratingForNext(r);
+  return Math.min(100, ((r - base) / (next - base)) * 100);
+}
+async function sha256(str) {
+  const data = new TextEncoder().encode(str);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function roleLabel(role) {
+  return { owner: 'владелец', moderator: 'модератор', member: 'участник' }[role] || '';
+}
+function levelTag(rating) {
+  return `<span class="level-tag">⭐ ${levelOf(rating)}</span>`;
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+async function loadProfile(userId) {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+  if (error) return null;
+  return data;
+}
+
+async function signUp() {
+  $('authError').textContent = '';
+  const email = $('email').value.trim().toLowerCase();
+  const password = $('password').value;
+  if (!email || !email.includes('@')) { $('authError').textContent = 'Некорректный email'; return; }
+  if (password.length < 6) { $('authError').textContent = 'Пароль минимум 6'; return; }
+  const { error } = await supabase.auth.signUp({ email, password });
+  if (error) { $('authError').textContent = error.message; return; }
+  alert('Аккаунт создан. Войдите.');
+}
+async function signIn() {
+  $('authError').textContent = '';
+  const email = $('email').value.trim().toLowerCase();
+  const password = $('password').value;
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) $('authError').textContent = error.message;
+}
+async function signOut() {
+  if (channel) { await supabase.removeChannel(channel); channel = null; }
+  if (dmChannel) { await supabase.removeChannel(dmChannel); dmChannel = null; }
+  await supabase.auth.signOut();
+  currentUser = null; currentProfile = null; currentRoom = null; currentDmPeer = null;
+  showScreen('auth');
+}
+
+async function boot(session) {
+  if (!session?.user) { showScreen('auth'); return; }
+  currentUser = session.user;
+  currentProfile = await loadProfile(currentUser.id);
+  $('userLabel').textContent = currentUser.email;
+  showScreen('room');
+  await refreshRooms();
+}
+
+supabase.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_OUT') { showScreen('auth'); return; }
+  if (session?.user) await boot(session);
+});
+const { data: { session } } = await supabase.auth.getSession();
+await boot(session);
+
+$('loginBtn').addEventListener('click', signIn);
+$('signupBtn').addEventListener('click', signUp);
+$('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
+$('logoutBtn').addEventListener('click', signOut);
+
+// ============================================================
+// КОМНАТЫ
+// ============================================================
+async function refreshRooms() {
+  const { data, error } = await supabase
+    .from('rooms')
+    .select('*, room_members(user_id, role)')
+    .order('created_at', { ascending: false });
+  if (error) { console.error(error); return; }
+  roomList.innerHTML = '';
+  $('noRooms').style.display = data.length === 0 ? '' : 'none';
+  data.forEach(room => {
+    const myMembership = (room.room_members || []).find(m => m.user_id === currentUser.id);
+    const isMember = !!myMembership;
+    const div = document.createElement('div');
+    div.className = 'room-item';
+    div.innerHTML = `
+      <div class="name"># ${escapeHtml(room.name)}</div>
+      <div class="meta">${(room.room_members || []).length} участн.</div>
+      ${isMember ? `<span class="badge">${roleLabel(myMembership.role)}</span>` : ''}
+      ${room.pass_hash ? '<div class="lock">🔒</div>' : ''}
+    `;
+    div.addEventListener('click', () => openRoom(room));
+    roomList.appendChild(div);
+  });
+}
+
+function setTab(tab) {
+  ['listPane','createPane','joinPane'].forEach(id => $(id).classList.add('hidden'));
+  ['tabList','tabCreate'].forEach(id => $(id).classList.remove('active'));
+  if (tab === 'list') { $('listPane').classList.remove('hidden'); $('tabList').classList.add('active'); refreshRooms(); }
+  if (tab === 'create') { $('createPane').classList.remove('hidden'); $('tabCreate').classList.add('active'); $('newRoomName').focus(); }
+}
+$('tabList').addEventListener('click', () => setTab('list'));
+$('tabCreate').addEventListener('click', () => setTab('create'));
+
+async function createRoom() {
+  $('createError').textContent = '';
+  const name = $('newRoomName').value.trim();
+  const pass = $('newRoomPass').value;
+  const whitelist = $('newRoomWhitelist').checked;
+  if (!name) { $('createError').textContent = 'Введите название'; return; }
+  const passHash = pass ? await sha256(pass) : null;
+  const { data: room, error } = await supabase
+    .from('rooms').insert({ name, pass_hash: passHash, owner_id: currentUser.id, whitelist }).select().single();
+  if (error) { $('createError').textContent = error.message; return; }
+  const { error: memErr } = await supabase
+    .from('room_members').insert({ room_id: room.id, user_id: currentUser.id, role: 'owner' });
+  if (memErr) { $('createError').textContent = memErr.message; return; }
+  $('newRoomName').value = ''; $('newRoomPass').value = '';
+  await refreshRooms();
+  await openRoom(room);
+}
+$('createBtn').addEventListener('click', createRoom);
+
+async function openRoom(room) {
+  if (room.pass_hash) {
+    pendingRoom = room;
+    ['listPane','createPane'].forEach(id => $(id).classList.add('hidden'));
+    $('joinPane').classList.remove('hidden');
+    $('joinTitle').textContent = 'Вход в # ' + room.name;
+    $('joinError').textContent = ''; $('joinPass').value = '';
+    $('joinPass').focus();
+    return;
+  }
+  await enterRoom(room);
+}
+async function confirmJoin() {
+  if (!pendingRoom) return;
+  if (await sha256($('joinPass').value) !== pendingRoom.pass_hash) { $('joinError').textContent = 'Неверный пароль'; return; }
+  const room = pendingRoom; pendingRoom = null;
+  await enterRoom(room);
+}
+$('joinConfirmBtn').addEventListener('click', confirmJoin);
+$('joinCancelBtn').addEventListener('click', () => { pendingRoom = null; setTab('list'); });
+$('joinPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmJoin(); });
+
+async function enterRoom(room) {
+  const { data: membership } = await supabase
+    .from('room_members').select('role').eq('room_id', room.id).eq('user_id', currentUser.id).maybeSingle();
+  if (!membership && room.whitelist) { alert('Вас нет в белом списке'); setTab('list'); return; }
+  if (!membership) {
+    const { error } = await supabase.from('room_members').insert({ room_id: room.id, user_id: currentUser.id, role: 'member' });
+    if (error) { alert(error.message); return; }
+    currentRole = 'member';
+  } else currentRole = membership.role;
+
+  currentRoom = room;
+  roomTitle.textContent = '# ' + room.name;
+  myRoleBadge.textContent = roleLabel(currentRole);
+  $('userEmailChat').textContent = currentUser.email;
+  statusLine.textContent = '';
+  showScreen('chat');
+  await loadMessages();
+  subscribeMessages();
+  messageInput.focus();
+}
+
+$('backBtn').addEventListener('click', async () => {
+  if (channel) { await supabase.removeChannel(channel); channel = null; }
+  currentRoom = null; currentRole = null; seenIds.clear();
+  showScreen('room'); await refreshRooms();
+});
+
+// ============================================================
+// СООБЩЕНИЯ КОМНАТЫ
+// ============================================================
+async function loadMessages() {
+  messagesEl.innerHTML = ''; seenIds.clear();
+  const { data } = await supabase.from('messages')
+    .select('*').eq('room_id', currentRoom.id).order('created_at', { ascending: true }).limit(200);
+  if (!data || !data.length) { messagesEl.innerHTML = '<div class="empty">Пока нет сообщений</div>'; return; }
+  for (const msg of data) await renderMessage(msg);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+async function renderMessage(msg) {
+  if (seenIds.has(msg.id)) return;
+  seenIds.add(msg.id);
+  const empty = messagesEl.querySelector('.empty'); if (empty) empty.remove();
+
+  const isOwn = msg.sender_id === currentUser.id;
+  let senderLevel = 0, isAdmin = false;
+  const { data: p } = await supabase.from('profiles').select('rating, is_admin').eq('id', msg.sender_id).maybeSingle();
+  if (p) { senderLevel = p.rating; isAdmin = p.is_admin; }
+
+  const div = document.createElement('div');
+  div.className = 'msg' + (isOwn ? ' own' : '');
+
+  if (msg.kind === 'gift') {
+    div.classList.add('gift');
+    const g = giftById(msg.gift_id);
+    div.innerHTML = `
+      <div class="sender">${isOwn ? 'Вы' : escapeHtml(msg.sender_email)} ${levelTag(senderLevel)} ${isAdmin ? '<span class="admin-tag">ADMIN</span>' : ''}</div>
+      <div class="gift-emoji">${g ? g.emoji : '🎁'}</div>
+      <div class="gift-name">${g ? g.name : 'Подарок'}</div>
+      <div class="gift-price">${g ? g.price + ' 🪙' : ''}</div>
+      <div class="time">${formatTime(msg.created_at)}</div>
+    `;
+  } else {
+    div.innerHTML = `
+      <div class="sender">${isOwn ? 'Вы' : escapeHtml(msg.sender_email)} ${levelTag(senderLevel)} ${isAdmin ? '<span class="admin-tag">ADMIN</span>' : ''}</div>
+      <div>${escapeHtml(msg.content || '')}</div>
+      <div class="time">${formatTime(msg.created_at)}</div>
+    `;
+  }
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function subscribeMessages() {
+  channel = supabase.channel('room:' + currentRoom.id)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${currentRoom.id}` },
+      async (payload) => { await renderMessage(payload.new); })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') statusLine.textContent = '🟢 Подключено';
+      else if (status === 'CHANNEL_ERROR') statusLine.textContent = '🔴 Ошибка канала';
+    });
+}
+
+$('composer').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = messageInput.value.trim();
+  if (!text || !currentRoom) return;
+  messageInput.value = '';
+  const { error } = await supabase.from('messages').insert({
+    room_id: currentRoom.id, sender_id: currentUser.id,
+    sender_email: currentUser.email, content: text, kind: 'text'
+  });
+  if (error) statusLine.textContent = '⚠️ ' + error.message;
+});
+
+// ============================================================
+// ЛС
+// ============================================================
+$('dmBtn').addEventListener('click', () => {
+  showScreen('dm');
+  $('dmTabList').classList.add('active'); $('dmTabSearch').classList.remove('active');
+  $('dmListPane').classList.remove('hidden'); $('dmSearchPane').classList.add('hidden');
+  renderDmList();
+});
+$('dmBackBtn').addEventListener('click', () => { showScreen('room'); refreshRooms(); });
+$('dmTabList').addEventListener('click', () => {
+  $('dmTabList').classList.add('active'); $('dmTabSearch').classList.remove('active');
+  $('dmListPane').classList.remove('hidden'); $('dmSearchPane').classList.add('hidden');
+  renderDmList();
+});
+$('dmTabSearch').addEventListener('click', () => {
+  $('dmTabList').classList.remove('active'); $('dmTabSearch').classList.add('active');
+  $('dmListPane').classList.add('hidden'); $('dmSearchPane').classList.remove('hidden');
+  $('dmSearchInput').focus();
+});
+
+async function renderDmList() {
+  const { data, error } = await supabase
+    .from('dms')
+    .select('*')
+    .or(`sender_id.eq.${currentUser.id},recipient_id.eq.${currentUser.id}`)
+    .order('created_at', { ascending: false });
+  if (error) { console.error(error); return; }
+
+  const peers = new Map();
+  data.forEach(m => {
+    const peerId = m.sender_id === currentUser.id ? m.recipient_id : m.sender_id;
+    if (!peers.has(peerId)) peers.set(peerId, { last: m, unread: 0 });
+    if (m.recipient_id === currentUser.id && !m.read) peers.get(peerId).unread++;
+  });
+
+  const el = $('dmList'); el.innerHTML = '';
+  $('noDms').style.display = peers.size === 0 ? '' : 'none';
+
+  for (const [peerId, info] of peers) {
+    const { data: p } = await supabase.from('profiles').select('email, rating, is_admin').eq('id', peerId).maybeSingle();
+    const email = p?.email || '?';
+    const div = document.createElement('div');
+    div.className = 'dm-item';
+    div.innerHTML = `
+      <div class="avatar">${escapeHtml(email.charAt(0).toUpperCase())}</div>
+      <div class="info">
+        <div class="name">${escapeHtml(email)} ${levelTag(p?.rating || 0)} ${p?.is_admin ? '<span class="admin-tag">ADMIN</span>' : ''}</div>
+        <div class="preview">${info.last.kind === 'gift' ? '🎁 Подарок' : escapeHtml((info.last.content || '').slice(0, 40))}</div>
+      </div>
+      ${info.unread ? `<span class="badge">${info.unread}</span>` : ''}
+    `;
+    div.addEventListener('click', () => openDmChat(peerId, email));
+    el.appendChild(div);
+  }
+}
+
+$('dmSearchBtn').addEventListener('click', async () => {
+  $('dmSearchError').textContent = '';
+  const q = $('dmSearchInput').value.trim().toLowerCase();
+  const results = $('dmSearchResults'); results.innerHTML = '';
+  if (!q) return;
+  const { data, error } = await supabase.from('profiles').select('id, email, rating, is_admin')
+    .ilike('email', `%${q}%`).neq('id', currentUser.id).limit(20);
+  if (error) { $('dmSearchError').textContent = error.message; return; }
+  if (!data.length) { $('dmSearchError').textContent = 'Никого не найдено'; return; }
+  data.forEach(u => {
+    const r = document.createElement('div');
+    r.className = 'dm-search-result';
+    r.innerHTML = `${escapeHtml(u.email)} ${levelTag(u.rating)} ${u.is_admin ? '<span class="admin-tag">ADMIN</span>' : ''}`;
+    r.addEventListener('click', () => openDmChat(u.id, u.email));
+    results.appendChild(r);
+  });
+});
+$('dmSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('dmSearchBtn').click(); });
+
+async function openDmChat(peerId, peerEmail) {
+  currentDmPeer = peerId;
+  $('dmChatTitle').textContent = '✉️ ' + peerEmail;
+  showScreen('dmchat');
+  await loadDmMessages();
+  subscribeDm();
+  // помечаем прочитанными
+  await supabase.from('dms').update({ read: true })
+    .eq('sender_id', peerId).eq('recipient_id', currentUser.id).eq('read', false);
+  $('dmMessageInput').focus();
+}
+
+async function loadDmMessages() {
+  const el = $('dmMessages'); el.innerHTML = ''; seenDmIds.clear();
+  const { data } = await supabase.from('dms').select('*')
+    .or(`and(sender_id.eq.${currentUser.id},recipient_id.eq.${currentDmPeer}),and(sender_id.eq.${currentDmPeer},recipient_id.eq.${currentUser.id})`)
+    .order('created_at', { ascending: true }).limit(200);
+  if (!data || !data.length) { el.innerHTML = '<div class="empty">Пока нет сообщений</div>'; return; }
+  for (const msg of data) await renderDmMessage(msg);
+  el.scrollTop = el.scrollHeight;
+}
+
+async function renderDmMessage(msg) {
+  if (seenDmIds.has(msg.id)) return;
+  seenDmIds.add(msg.id);
+  const el = $('dmMessages');
+  const empty = el.querySelector('.empty'); if (empty) empty.remove();
+
+  const isOwn = msg.sender_id === currentUser.id;
+  const div = document.createElement('div');
+  div.className = 'msg' + (isOwn ? ' own' : '');
+
+  if (msg.kind === 'gift') {
+    div.classList.add('gift');
+    const g = giftById(msg.gift_id);
+    div.innerHTML = `
+      <div class="sender">${isOwn ? 'Вы' : escapeHtml(msg.sender_email)}</div>
+      <div class="gift-emoji">${g ? g.emoji : '🎁'}</div>
+      <div class="gift-name">${g ? g.name : 'Подарок'}</div>
+      <div class="time">${formatTime(msg.created_at)}</div>
+    `;
+  } else {
+    div.innerHTML = `
+      <div class="sender">${isOwn ? 'Вы' : escapeHtml(msg.sender_email)}</div>
+      <div>${escapeHtml(msg.content || '')}</div>
+      <div class="time">${formatTime(msg.created_at)}</div>
+    `;
+  }
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function subscribeDm() {
+  if (dmChannel) { supabase.removeChannel(dmChannel); dmChannel = null; }
+  dmChannel = supabase.channel('dm:' + currentDmPeer)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dms' },
+      async (payload) => {
+        const m = payload.new;
+        if ((m.sender_id === currentUser.id && m.recipient_id === currentDmPeer) ||
+            (m.sender_id === currentDmPeer && m.recipient_id === currentUser.id)) {
+          await renderDmMessage(m);
+        }
+      })
+    .subscribe();
+}
+
+$('dmChatBackBtn').addEventListener('click', async () => {
+  if (dmChannel) { await supabase.removeChannel(dmChannel); dmChannel = null; }
+  currentDmPeer = null;
+  showScreen('dm'); renderDmList();
+});
+
+$('dmComposer').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('dmMessageInput').value.trim();
+  if (!text || !currentDmPeer) return;
+  $('dmMessageInput').value = '';
+  const { error } = await supabase.from('dms').insert({
+    sender_id: currentUser.id, recipient_id: currentDmPeer,
+    sender_email: currentUser.email, content: text, kind: 'text'
+  });
+  if (error) $('dmChatStatusLine').textContent = '⚠️ ' + error.message;
+});
+
+// ============================================================
+// ТОП
+// ============================================================
+$('topBtn').addEventListener('click', async () => {
+  const { data, error } = await supabase.from('profiles')
+    .select('*').order('rating', { ascending: false }).limit(20);
+  if (error) { alert(error.message); return; }
+  const list = $('topList'); list.innerHTML = '';
+  data.forEach((p, i) => {
+    const rank = i + 1;
+    const rankClass = rank <= 3 ? `r${rank}` : '';
+    const div = document.createElement('div');
+    div.className = 'top-row';
+    div.innerHTML = `
+      <div class="rank ${rankClass}">${rank}</div>
+      <div class="avatar">${escapeHtml(p.email.charAt(0).toUpperCase())}</div>
+      <div class="who">
+        <div class="name">${escapeHtml(p.email)} ${p.is_admin ? '<span class="admin-tag">ADMIN</span>' : ''}</div>
+        <div class="sub">⭐ Ур. ${levelOf(p.rating)} · рейтинг ${p.rating}</div>
+      </div>
+      <div class="stats">🪙 ${p.balance}</div>
+    `;
+    list.appendChild(div);
+  });
+  topPanel.classList.remove('hidden');
+});
+$('closeTopBtn').addEventListener('click', () => topPanel.classList.add('hidden'));
+
+// ============================================================
+// УЧАСТНИКИ
+// ============================================================
+$('membersBtn').addEventListener('click', async () => {
+  if (!currentRoom) return;
+  const { data, error } = await supabase
+    .from('room_members').select('user_id, role, profiles(email, rating, is_admin)')
+    .eq('room_id', currentRoom.id);
+  if (error) { alert(error.message); return; }
+  $('membersTitle').textContent = 'Комната # ' + currentRoom.name;
+  const isOwner = currentRole === 'owner';
+  const canManage = currentRole === 'owner' || currentRole === 'moderator';
+  $('ownerSettings').classList.toggle('hidden', !isOwner);
+  $('addMemberBlock').classList.toggle('hidden', !canManage);
+  $('leaveRoomBtn').classList.toggle('hidden', isOwner);
+  if (isOwner) {
+    $('whitelistToggle').checked = !!currentRoom.whitelist;
+    $('renameInput').value = currentRoom.name;
+  }
+  const list = $('membersList'); list.innerHTML = '';
+  data.forEach(m => {
+    const row = document.createElement('div');
+    row.className = 'member-row';
+    const email = m.profiles?.email || '?';
+    const rating = m.profiles?.rating || 0;
+    const isAdmin = m.profiles?.is_admin;
+    const isMe = m.user_id === currentUser.id;
+    row.innerHTML = `<div class="email">${escapeHtml(email)}${isMe ? ' (вы)' : ''} ${levelTag(rating)} ${isAdmin ? '<span class="admin-tag">ADMIN</span>' : ''}</div><span class="badge">${roleLabel(m.role)}</span>`;
+    if (canManage && m.role !== 'owner' && !isMe) {
+      const sel = document.createElement('select');
+      sel.innerHTML = `<option value="member" ${m.role === 'member' ? 'selected' : ''}>участник</option><option value="moderator" ${m.role === 'moderator' ? 'selected' : ''}>модератор</option>`;
+      sel.addEventListener('change', () => changeRole(m.user_id, sel.value));
+      row.appendChild(sel);
+      const kick = document.createElement('button'); kick.textContent = 'Кик';
+      kick.addEventListener('click', () => kickMember(m.user_id));
+      row.appendChild(kick);
+    }
+    list.appendChild(row);
+  });
+  membersPanel.classList.remove('hidden');
+});
+async function changeRole(userId, newRole) {
+  const { error } = await supabase.from('room_members').update({ role: newRole })
+    .eq('room_id', currentRoom.id).eq('user_id', userId);
+  if (error) alert(error.message); else $('membersBtn').click();
+}
+async function kickMember(userId) {
+  if (!confirm('Кикнуть?')) return;
+  const { error } = await supabase.from('room_members').delete()
+    .eq('room_id', currentRoom.id).eq('user_id', userId);
+  if (error) alert(error.message); else $('membersBtn').click();
+}
+$('whitelistToggle').addEventListener('change', async (e) => {
+  const { error } = await supabase.from('rooms').update({ whitelist: e.target.checked }).eq('id', currentRoom.id);
+  if (error) alert(error.message); else currentRoom.whitelist = e.target.checked;
+});
+$('renameBtn').addEventListener('click', async () => {
+  $('renameError').textContent = '';
+  const newName = $('renameInput').value.trim();
+  if (!newName) { $('renameError').textContent = 'Введите название'; return; }
+  const { error } = await supabase.from('rooms').update({ name: newName }).eq('id', currentRoom.id);
+  if (error) { $('renameError').textContent = error.message; return; }
+  currentRoom.name = newName; roomTitle.textContent = '# ' + newName;
+});
+$('addBtn').addEventListener('click', async () => {
+  $('addError').textContent = '';
+  const email = $('addEmail').value.trim().toLowerCase();
+  const role = $('addRole').value;
+  if (!email) { $('addError').textContent = 'Введите email'; return; }
+  const { data: target } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
+  if (!target) { $('addError').textContent = 'Не найден'; return; }
+  const { error } = await supabase.from('room_members').insert({ room_id: currentRoom.id, user_id: target.id, role });
+  if (error) { $('addError').textContent = error.message; return; }
+  $('addEmail').value = ''; $('membersBtn').click();
+});
+$('leaveRoomBtn').addEventListener('click', async () => {
+  if (!confirm('Покинуть?')) return;
+  const { error } = await supabase.from('room_members').delete()
+    .eq('room_id', currentRoom.id).eq('user_id', currentUser.id);
+  if (error) { alert(error.message); return; }
+  membersPanel.classList.add('hidden'); $('backBtn').click();
+});
+$('closeMembersBtn').addEventListener('click', () => membersPanel.classList.add('hidden'));
+
+// ============================================================
+// АККАУНТ + ИНВЕНТАРЬ + АДМИН
+// ============================================================
+$('accountBtn').addEventListener('click', async () => {
+  currentProfile = await loadProfile(currentUser.id);
+  $('accEmail').textContent = currentProfile.email;
+  $('accName').textContent = currentProfile.email.split('@')[0];
+  $('accAvatar').textContent = currentProfile.email.charAt(0).toUpperCase();
+  $('accBalance').textContent = currentProfile.balance;
+  $('accRating').textContent = currentProfile.rating;
+  $('accLevel').textContent = levelOf(currentProfile.rating);
+  $('accNext').textContent = ratingForNext(currentProfile.rating);
+  $('accProgress').style.width = progressPercent(currentProfile.rating) + '%';
+  $('accAdminTag').classList.toggle('hidden', !currentProfile.is_admin);
+  $('adminTopupBlock').classList.toggle('hidden', !currentProfile.is_admin);
+  $('adminNotYet').classList.toggle('hidden', !!currentProfile.is_admin);
+  await renderInventory();
+  accountPanel.classList.remove('hidden');
+});
+$('closeAccountBtn').addEventListener('click', () => accountPanel.classList.add('hidden'));
+
+async function renderInventory() {
+  const { data } = await supabase.from('inventory').select('*')
+    .eq('user_id', currentUser.id).eq('sold', false).order('acquired_at', { ascending: false });
+  const list = $('inventoryList'); list.innerHTML = '';
+  if (!data || !data.length) { list.innerHTML = '<div class="hint" style="text-align:left;">Пусто</div>'; return; }
+  data.forEach(inv => {
+    const g = giftById(inv.gift_id);
+    if (!g) return;
+    const row = document.createElement('div');
+    row.className = 'inventory-item';
+    row.innerHTML = `
+      <div class="emoji">${g.emoji}</div>
+      <div class="info">
+        <div class="name">${g.name}</div>
+        <div class="from">от ${escapeHtml(inv.from_email || '—')}</div>
+      </div>
+      <button data-id="${inv.id}" data-price="${g.price}">Продать за ${Math.floor(g.price * 0.85)} 🪙</button>
+    `;
+    row.querySelector('button').addEventListener('click', async (e) => {
+      const btn = e.target;
+      btn.disabled = true;
+      const { data: refund, error } = await supabase.rpc('sell_gift', {
+        p_inventory_id: parseInt(btn.dataset.id),
+        p_price: parseInt(btn.dataset.price)
+      });
+      if (error) { alert(error.message); btn.disabled = false; return; }
+      currentProfile = await loadProfile(currentUser.id);
+      $('accBalance').textContent = currentProfile.balance;
+      await renderInventory();
+    });
+    list.appendChild(row);
+  });
+}
+
+$('topupBtn').addEventListener('click', async () => {
+  $('adminError').textContent = '';
+  const email = $('topupEmail').value.trim().toLowerCase();
+  const amount = parseInt($('topupAmount').value, 10);
+  if (!email || !amount) { $('adminError').textContent = 'Заполните'; return; }
+  const { data: target } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
+  if (!target) { $('adminError').textContent = 'Не найден'; return; }
+  const { error } = await supabase.rpc('grant_coins', { target_user_id: target.id, amount });
+  if (error) { $('adminError').textContent = error.message; return; }
+  $('adminError').textContent = `✓ Выдано ${amount}`;
+  setTimeout(() => { $('adminError').textContent = ''; }, 2000);
+});
+
+$('changePassBtn').addEventListener('click', async () => {
+  $('changePassError').textContent = '';
+  const p1 = $('newPassInput').value, p2 = $('newPass2Input').value;
+  if (p1.length < 6) { $('changePassError').textContent = 'Минимум 6'; return; }
+  if (p1 !== p2) { $('changePassError').textContent = 'Не совпадают'; return; }
+  const { error } = await supabase.auth.updateUser({ password: p1 });
+  if (error) { $('changePassError').textContent = error.message; return; }
+  $('newPassInput').value = ''; $('newPass2Input').value = '';
+  $('changePassError').style.color = '#4ade80';
+  $('changePassError').textContent = '✓ Изменён';
+  setTimeout(() => { $('changePassError').textContent = ''; $('changePassError').style.color = ''; }, 2000);
+});
+
+// ============================================================
+// ПОДАРКИ
+// ============================================================
+$('giftBtn').addEventListener('click', () => openGift({ type: 'room' }));
+$('dmGiftBtn').addEventListener('click', () => { if (currentDmPeer) openGift({ type: 'dm', peerId: currentDmPeer }); });
+$('closeGiftBtn').addEventListener('click', () => giftPanel.classList.add('hidden'));
+
+async function openGift(target) {
+  giftTarget = target;
+  currentProfile = await loadProfile(currentUser.id);
+  $('giftBalance').textContent = currentProfile.balance;
+  $('giftError').textContent = '';
+  if (target.type === 'room') { $('giftTitle').textContent = 'Подарок в комнату'; $('giftTarget').textContent = '#' + currentRoom.name; }
+  else {
+    const { data: p } = await supabase.from('profiles').select('email').eq('id', target.peerId).maybeSingle();
+    $('giftTitle').textContent = 'Личный подарок'; $('giftTarget').textContent = p?.email || '';
+  }
+  const grid = $('giftsGrid'); grid.innerHTML = '';
+  GIFTS.forEach(g => {
+    const btn = document.createElement('button');
+    btn.className = 'gift-card';
+    btn.disabled = currentProfile.balance < g.price;
+    btn.innerHTML = `<span class="emoji">${g.emoji}</span><span class="name">${g.name}</span><span class="price">${g.price} 🪙</span>`;
+    btn.addEventListener('click', () => sendGift(g));
+    grid.appendChild(btn);
+  });
+  giftPanel.classList.remove('hidden');
+}
+
+async function sendGift(g) {
+  $('giftError').textContent = '';
+  const params = {
+    p_gift_id: g.id,
+    p_price: g.price,
+    p_room_id: giftTarget.type === 'room' ? currentRoom.id : null,
+    p_recipient_id: giftTarget.type === 'dm' ? giftTarget.peerId : null
+  };
+  const { error } = await supabase.rpc('send_gift', params);
+  if (error) { $('giftError').textContent = error.message; return; }
+  currentProfile = await loadProfile(currentUser.id);
+  $('giftBalance').textContent = currentProfile.balance;
+  giftPanel.classList.add('hidden');
+  if (giftTarget.type === 'dm' && currentDmPeer) await loadDmMessages();
+  if (giftTarget.type === 'room' && currentRoom) await loadMessages();
+}
+</script>
+</body>
+</html>
